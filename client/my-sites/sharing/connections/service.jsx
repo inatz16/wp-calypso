@@ -111,7 +111,14 @@ export class SharingService extends Component {
 	 *
 	 * @param {Number} keyringConnectionId Keyring connection ID.
 	 */
-	externalAccessProvided = keyringConnectionId => {}; // eslint-disable-line no-unused-vars
+	externalAccessProvided( keyringConnectionId ) {
+		if ( ! keyringConnectionId ) {
+			this.setState( {
+				isAwaitingConnections: false,
+				isConnecting: false,
+			} );
+		}
+	} // eslint-disable-line no-unused-vars
 
 	/**
 	 * Establishes a new connection.

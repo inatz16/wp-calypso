@@ -39,13 +39,7 @@ export class GoogleMyBusiness extends SharingService {
 	};
 
 	externalAccessProvided = keyringConnectionId => {
-		if ( ! keyringConnectionId ) {
-			this.setState( {
-				isAwaitingConnections: false,
-				isConnecting: false,
-			} );
-			return;
-		}
+		super.externalAccessProvided( keyringConnectionId );
 		this.props.connectGoogleMyBusinessAccount( this.props.siteId, keyringConnectionId );
 	};
 
