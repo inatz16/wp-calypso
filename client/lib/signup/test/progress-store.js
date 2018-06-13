@@ -7,23 +7,25 @@
  * External dependencies
  */
 import assert from 'assert'; // eslint-disable-line import/no-nodejs-modules
-import { defer, find, last, omit } from 'lodash';
+import { first, defer, find, last, omit } from 'lodash';
 import sinon from 'sinon';
+import { createStore } from 'redux';
 
 /**
  * Internal dependencies
  */
 import Dispatcher from 'dispatcher';
+import { reducer } from 'state';
+import SignupActions from '../actions';
+import SignupProgressStore from '../progress-store';
 
 jest.mock( 'lib/user', () => () => {} );
 jest.mock( 'signup/config/steps', () => require( './mocks/signup/config/steps' ) );
 
 describe( 'progress-store', () => {
-	let SignupProgressStore, SignupActions;
-
 	beforeAll( () => {
-		SignupProgressStore = require( '../progress-store' );
-		SignupActions = require( '../actions' );
+		const store = createStore( reducer );
+		SignupProgressStore.setReduxStore( store );
 	} );
 
 	test( 'should return an empty at first', () => {
@@ -108,15 +110,13 @@ describe( 'progress-store', () => {
 		assert.equal( find( SignupProgressStore.get(), { stepName: 'asyncStep' } ).status, 'pending' );
 	} );
 
-	test( 'should mark only new saved steps as in-progress', () => {
+	test( 'should mark only new saved steps as in-progress', done => {
 		SignupActions.saveSignupStep( { stepName: 'site-selection' } );
-		defer( () => {
-			assert.notEqual( SignupProgressStore.get()[ 0 ].status, 'in-progress' );
-		} );
-
 		SignupActions.saveSignupStep( { stepName: 'last-step' } );
 		defer( () => {
-			assert.equal( last( SignupProgressStore.get() ).status, 'in-progress' );
+			expect( first( SignupProgressStore.get() ).status ).not.toEqual( 'in-progress' );
+			expect( last( SignupProgressStore.get() ).status ).toEqual( 'in-progress' );
+			done();
 		} );
 	} );
 
@@ -126,5 +126,65 @@ describe( 'progress-store', () => {
 
 		SignupActions.processedSignupStep( { stepName: 'site-selection' } );
 		assert.equal( SignupProgressStore.get()[ 0 ].status, 'completed' );
+	} );
+
+	describe( 'subscriptions', () => {
+		beforeEach( () => {
+			SignupProgressStore.reset();
+		} );
+
+		test( 'should handle adding and removing subscriptions', () => {
+			const callback = () => {};
+			SignupProgressStore.subscribe( callback );
+			assert.equal( SignupProgressStore.subscribers.size, 1 );
+			assert.equal( typeof SignupProgressStore.subscribers.get( callback ), 'function' );
+
+			SignupProgressStore.unsubscribe( callback );
+			assert.equal( SignupProgressStore.subscribers.size, 0 );
+			assert.equal( typeof SignupProgressStore.subscribers.get( callback ), 'undefined' );
+		} );
+
+		test( 'should notify subscribers only if the values change', done => {
+			const stepName = 'site-selection';
+			expect( SignupProgressStore.get() ).toHaveLength( 0 );
+			expect( SignupProgressStore.subscribers.size ).toEqual( 0 );
+
+			// Make a subscription
+			const callback = jest.fn();
+			SignupProgressStore.subscribe( callback );
+			expect( callback ).not.toHaveBeenCalled();
+			expect( SignupProgressStore.subscribers.size ).toEqual( 1 );
+
+			// Trigger a change, which should call the first callback
+			SignupProgressStore.set( [ { stepName } ] );
+			expect( SignupProgressStore.get() ).toHaveLength( 1 );
+			expect( first( SignupProgressStore.get() ) ).toEqual( { stepName } );
+
+			defer( () => {
+				expect( SignupProgressStore.get() ).toHaveLength( 1 );
+				expect( callback ).toHaveBeenCalledTimes( 1 );
+				done();
+			} );
+		} );
+
+		test( 'should not notify subscribers only the value have remained the same', done => {
+			const stepName = 'site-selection';
+			SignupProgressStore.set( [ { stepName } ] );
+			assert.equal( SignupProgressStore.get().length, 1 );
+
+			// NOTE: We need to await completion of Flux dispatcher handling incoming actions
+			defer( () => {
+				const callback = jest.fn();
+				SignupProgressStore.subscribe( callback );
+				expect( callback ).not.toHaveBeenCalled();
+
+				SignupProgressStore.set( [ { stepName } ] );
+
+				defer( () => {
+					expect( callback ).not.toHaveBeenCalled();
+					done();
+				} );
+			} );
+		} );
 	} );
 } );
