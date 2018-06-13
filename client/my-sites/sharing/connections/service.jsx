@@ -118,7 +118,7 @@ export class SharingService extends Component {
 				isConnecting: false,
 			} );
 		}
-	} // eslint-disable-line no-unused-vars
+	}
 
 	/**
 	 * Establishes a new connection.
